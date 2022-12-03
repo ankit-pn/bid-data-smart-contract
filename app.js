@@ -4,9 +4,13 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const Web3 = require('web3');
 const CONTRACT_ABI = require('./config');
+const Transactions = require('./transactionModel');
+const dbConnect = require("./dbConnect");
 // const CONTRACT_ADDRESS = require('./config');
 const HDWalletProvider = require('@truffle/hdwallet-provider');
 require('dotenv').config();
+
+dbConnect();
 
 app.use(cors());
 app.use(express.json());
@@ -37,8 +41,8 @@ var provider = new HDWalletProvider(process.env.MNEMONIC, 'https://goerli.infura
 var web3 = new Web3(provider);
 var myContract = new web3.eth.Contract(CONTRACT_ABI.CONTRACT_ABI, process.env.CONTRACT_ADDRESS);
 
-const addBidDetails = async (user, productId, productName,auctionId,soldTo,soldBy,soldAt) => {
-    const res = await myContract.methods.addBidDetails(user, productId, productName,auctionId,soldTo,soldBy,soldAt).send({
+const addBidDetails = async (user, productId, productName, auctionId, soldTo, soldBy, soldAt) => {
+    const res = await myContract.methods.addBidDetails(user, productId, productName, auctionId, soldTo, soldBy, soldAt).send({
         from: process.env.ACCOUNT
     });
     return res;
@@ -47,7 +51,7 @@ const getBidDetails = async (user) => {
     const data = await myContract.methods.getBidDetails(user).call();
     var res = [];
     for (let i = 0; i < data.length; i++) {
-        res.push({ 'productId': data[i]['productId'], 'productName': data[i]['productName'],'auctionId':data[i]['auctionId'],'soldTo':data[i]['soldTo'],'soldBy':data[i]['soldBy'],'soldAt':data[i]['soldAt'] });
+        res.push({ 'productId': data[i]['productId'], 'productName': data[i]['productName'], 'auctionId': data[i]['auctionId'], 'soldTo': data[i]['soldTo'], 'soldBy': data[i]['soldBy'], 'soldAt': data[i]['soldAt'] });
     }
     return { 'files': res };
 }
@@ -61,7 +65,18 @@ app.post("/postBidDetails", async (req, res) => {
     const soldAt = req.body.soldAt;
 
     // console.log(cid, user, fileName);
-    await addBidDetails(user, productId,productName,auctionId,soldTo,soldBy,soldAt).then((result) => {
+    await addBidDetails(user, productId, productName, auctionId, soldTo, soldBy, soldAt).then(async (result) => {
+
+        const trancactionDetails = new Transactions({
+            productId: productId,
+            productName: productName,
+            auctionId: auctionId,
+            soldTo: soldTo,
+            soldBy: soldBy,
+            soldAt: soldAt,
+            transactionHash: result['transactionHash']
+        })
+        await trancactionDetails.save();
         res.status(201).send({
             message: "Data Saved Suceessfully",
             info: result,
@@ -80,7 +95,7 @@ app.post("/getBidDetails", async (req, res) => {
     await getBidDetails(user).then((result) => {
         res.json(result);
     }).catch(
-        (err)=>{
+        (err) => {
             // console.log(user);
             console.log(err);
         }
@@ -88,4 +103,26 @@ app.post("/getBidDetails", async (req, res) => {
 });
 
 
+app.post('/getWinBidByUserId', async (request, response) => {
+    const soldTo = request.body.userId;
+    if (soldTo === undefined) {
+        response.json({ "msg": "sold not found" });
+    }
+    else {
+        const bidDetails = await Transactions.find({ soldTo: soldTo })
+        const resp = await bidDetails.length ? { "bidDetails": bidDetails } : { "message": "No Records Found" }
+        await response.json(resp)
+    }
+})
+
+app.post('/getAllWinBid', async (request, response) => {
+    if (request.body.aid === "all") {
+        const bidDetails = await Transactions.find()
+        const resp = await bidDetails.length ? { "bidDetails": bidDetails } : { "message": "No Records Found" }
+        await response.json(resp)
+    }
+    else {
+        await response.json({ "msg": "wrong" });
+    }
+})
 module.exports = app;
