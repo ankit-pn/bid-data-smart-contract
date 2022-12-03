@@ -9,6 +9,10 @@ const trancactionDetails = new mongoose.Schema({
         type:String,
         require:[true,"Please provide Data"],
     },
+    productName:{
+        type:String,
+        require: [true,"Please provide it"]
+    },
     auctionId:{
         type:String,
         require:[true,"Provide auctionHost"]
